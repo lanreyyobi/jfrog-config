@@ -1,0 +1,63 @@
+name: Upload
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  JFROG_NAMESPACE: "cloudops"
+  JF_URL: ${{ secrets.JF_URL }}
+  JF_ACCESS_TOKEN: ${{ secrets.TOKEN }}
+
+jobs:
+  release:
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v3
+      - name: Install node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: modules
+        run: npm install semantic-release @semantic-release/git @semantic-release/github -D
+      - name: release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: npx semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  upload:
+    needs: release
+    if: success()
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./vpc
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-tags: true
+      - run: terraform fmt --recursive
+      - name: Checkov GitHub Action
+        continue-on-error: true
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          skip_check: CKV2_AWS_12,CKV2_AWS_11,CKV2_AWS_19
+          output_format: cli,sarif
+          output_file_path: console,results.sarif
+      - name: setup
+        uses: jfrog/setup-jfrog-cli@v3
+      - name: config
+        run: |
+          export SERVER_ID=""
+          jf c add $SERVER_ID --url=$JF_URL --access-token=$JF_ACCESS_TOKEN --interactive=false
+          jf tfc --server-id-deploy $SERVER_ID --repo-deploy terraform-local-modules
+          jf tf p --namespace=${JFROG_NAMESPACE} --provider=local --tag=$(git describe --tags `git rev-list --tags --max-count=1`)
