@@ -1,0 +1,46 @@
+on:
+  workflow_call:
+    inputs:
+      work-dir:
+        required: true
+        type: string
+      aws-region:
+        required: true
+        type: string
+    secrets:
+      CI_ROLE:
+        required: true
+      JF_TOKEN:
+        required: true
+      JF_URL:
+        required: true
+jobs:
+  Infra-deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.work-dir }}
+    steps:
+      - name: AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.CI_ROLE }}
+          aws-region: ${{ inputs.aws-region }}
+
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+
+      - uses: StudistCorporation/actions-setup-terraform-credentials@v1.0.0
+        with:
+          token: ${{ secrets.JF_TOKEN }}
+          hostname: ${{ secrets.JF_URL }}
+      - name: init
+        run: terraform init
+      - name: Terraform format
+        run: terraform fmt
+      - name: Validate
+        run: terraform validate
+      - name: Plan
+        run: terraform plan
+     # - name: Apply
+       # run: terraform apply -auto-approve
