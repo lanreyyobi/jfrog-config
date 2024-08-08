@@ -1,0 +1,6 @@
+team   = "dev"
+topic  = "s3-event-notification-topic"
+env    = "prod"
+status = "Enabled"
+prefix = "wemadev"
+region = "us-west-2"
